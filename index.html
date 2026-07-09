@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es-AR">
 <head>
@@ -266,6 +267,20 @@
   .help-box p, .help-box li{font-size:13.5px; color:var(--ink-soft); line-height:1.55;}
   .help-box code{background:var(--paper); padding:1px 6px; border-radius:4px; font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--ink);}
 
+  /* ---------- Pantalla de bloqueo ---------- */
+  .lock-overlay{
+    display:none; position:fixed; inset:0; background:var(--paper);
+    align-items:center; justify-content:center; z-index:100; padding:20px;
+  }
+  .lock-overlay.open{display:flex;}
+  .lock-box{
+    background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow); max-width:420px; width:100%; padding:32px 28px; text-align:center;
+  }
+  .lock-icon{font-size:34px; margin-bottom:10px;}
+  .lock-box h2{font-size:19px; margin-bottom:10px;}
+  .lock-box p{font-size:13.5px; color:var(--ink-soft); margin-bottom:20px; line-height:1.5;}
+
   /* ---------- Modal Mi catálogo ---------- */
   .modal-overlay{
     display:none; position:fixed; inset:0; background:rgba(21,27,30,.55);
@@ -338,6 +353,16 @@
 </style>
 </head>
 <body>
+
+  <!-- Pantalla de bloqueo (prueba vencida / licencia inactiva) -->
+  <div class="lock-overlay" id="lockOverlay">
+    <div class="lock-box">
+      <div class="lock-icon">🔒</div>
+      <h2>Tu período de prueba terminó</h2>
+      <p id="lockMsg">Para seguir usando el Presupuestador, escribinos y te activamos el acceso.</p>
+      <a id="lockWhatsapp" class="btn btn-primary" href="#" target="_blank" rel="noopener">📲 Activar mi acceso por WhatsApp</a>
+    </div>
+  </div>
 
   <header>
     <div class="brand">
@@ -421,6 +446,7 @@
         <li><b>Publicalo como CSV:</b> Archivo → Compartir → Publicar en la web → elegí formato CSV → copiá el link.</li>
         <li><b>Armá el Apps Script</b> (te lo dejamos armado más abajo) para poder agregar/editar/borrar ítems desde botones, sin entrar nunca al Sheet. Extensiones → Apps Script, pegás el código, elegís un PIN, y lo "Implementás" como Aplicación web.</li>
         <li><b>Pegá las 2 URLs y tu PIN</b> en el objeto <code>CONFIG</code> al principio del <code>&lt;script&gt;</code> de este archivo: <code>catalogCsvUrl</code>, <code>scriptUrl</code> y <code>catalogPin</code>.</li>
+        <li><b>(Opcional) Período de prueba:</b> agregá una pestaña llamada <code>Licencia</code> en el Sheet, con <code>SI</code> en la celda A2 y una fecha de vencimiento en B2 (ej: 16/07/2026). Mientras esa fecha no pase, la herramienta funciona normal. Para cortar el acceso antes de tiempo, cambiá A2 a <code>NO</code>. Para renovar, actualizá la fecha de B2.</li>
       </ol>
       <p>Una vez conectado, tocando el botón <b>"🔧 Mi catálogo"</b> arriba de la página, el profesional puede agregar, editar o borrar sus propios ítems con botones simples — nunca ve la planilla, así que no hay riesgo de que borre algo sin querer.</p>
     </details>
@@ -512,6 +538,30 @@ const CATALOGO_DEMO = [
 ];
 
 let CATALOGO = [];
+
+/* ================== CHEQUEO DE LICENCIA ================== */
+async function chequearLicencia(){
+  if(!CONFIG.scriptUrl) return true; // sin Apps Script conectado, no bloqueamos nada
+
+  try{
+    const res = await fetch(CONFIG.scriptUrl + "?_=" + Date.now());
+    const data = await res.json();
+    if(data.activo === false){
+      const msg = data.vence
+        ? `Tu prueba venció el ${data.vence}. Escribinos y te activamos el acceso.`
+        : `Tu acceso está desactivado por ahora. Escribinos y lo resolvemos.`;
+      document.getElementById("lockMsg").textContent = msg;
+      document.getElementById("lockWhatsapp").href =
+        `https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent("Hola, quiero activar mi acceso al Presupuestador.")}`;
+      document.getElementById("lockOverlay").classList.add("open");
+      return false;
+    }
+    return true;
+  } catch(err){
+    console.warn("No se pudo chequear la licencia, se permite el acceso.", err);
+    return true; // si falla la consulta, no dejamos a nadie afuera por un error de red
+  }
+}
 
 /* ================== CARGA DEL CATÁLOGO (Google Sheet o demo) ================== */
 function parseCSV(text){
@@ -720,7 +770,10 @@ document.getElementById("btnPdf").addEventListener("click", ()=>{
 });
 
 renderTicket();
-cargarCatalogo();
+(async ()=>{
+  const habilitado = await chequearLicencia();
+  if(habilitado) cargarCatalogo();
+})();
 
 /* ================== PANEL "MI CATÁLOGO" ================== */
 let pinOk = false;
