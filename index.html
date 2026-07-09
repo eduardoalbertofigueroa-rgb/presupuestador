@@ -543,7 +543,10 @@ async function chequearLicencia(){
   if(!CONFIG.scriptUrl) return true; // sin Apps Script conectado, no bloqueamos nada
 
   try{
-    const res = await fetch(CONFIG.scriptUrl + "?_=" + Date.now());
+    const res = await fetch(CONFIG.scriptUrl, {
+      method:"POST",
+      body: JSON.stringify({ action:"check" })
+    });
     const data = await res.json();
     if(data.activo === false){
       const msg = data.vence
