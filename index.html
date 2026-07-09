@@ -323,11 +323,17 @@
   }
 
   /* ---------- Impresión (para "Descargar PDF") ---------- */
+  .print-only{display:none;}
   @media print{
     header, .help-box, .catalogo-panel, .mobile-bar, .ticket-actions, .no-print{display:none !important;}
     body{background:#fff;}
     .wrap{display:block; padding:0; max-width:none;}
     .ticket{box-shadow:none; border:1px solid #999;}
+    .print-only{
+      display:block; padding:16px 20px 4px; font-size:13px; color:var(--ink-soft);
+      border-bottom:1px dashed var(--line);
+    }
+    .print-only b{color:var(--ink); display:block; font-size:14px; margin-bottom:2px;}
   }
 </style>
 </head>
@@ -375,6 +381,8 @@
           <input type="number" id="validez" value="7" min="1">
         </div>
       </div>
+
+      <div class="print-only" id="printClientInfo"></div>
 
       <div class="perforation"></div>
 
@@ -697,6 +705,17 @@ document.getElementById("btnWhatsapp").addEventListener("click", ()=>{
 document.getElementById("btnPdf").addEventListener("click", ()=>{
   const { ids } = renderTicket();
   if(ids.length===0){ alert("Agregá al menos un ítem antes de generar el PDF."); return; }
+
+  const cliente = document.getElementById("clienteNombre").value || "Cliente";
+  const zona = document.getElementById("clienteZona").value;
+  const validez = document.getElementById("validez").value || "7";
+
+  document.getElementById("printClientInfo").innerHTML = `
+    <b>${cliente}</b>
+    ${zona ? zona + "<br>" : ""}
+    Presupuesto válido por ${validez} días.
+  `;
+
   window.print();
 });
 
