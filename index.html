@@ -348,6 +348,9 @@
       border-bottom:1px dashed var(--line);
     }
     .print-only b{color:var(--ink); display:block; font-size:14px; margin-bottom:2px;}
+    #printFooterInfo{
+      border-bottom:none; border-top:1px dashed var(--line); margin-top:6px; text-align:center;
+    }
   }
 </style>
 </head>
@@ -424,6 +427,8 @@
         <div class="totals-row grand"><span>Total</span><span class="mono" id="totalFinal">$ 0</span></div>
       </div>
 
+      <div class="print-only" id="printFooterInfo"></div>
+
       <div class="ticket-actions no-print">
         <button class="btn btn-primary" id="btnWhatsapp">📲 Enviar por WhatsApp</button>
         <button class="btn btn-outline" id="btnPdf">🖨️ Descargar PDF</button>
@@ -499,6 +504,13 @@ const CONFIG = {
   nombre: "El Tony — Electricidad y Aire Acondicionado",
   rubro: "Electricidad & Aire Acondicionado",
   whatsapp: "5492364316208", // número del profesional, con código de país sin '+' ni espacios
+
+  // Datos de contacto que van a aparecer al pie del presupuesto (PDF y WhatsApp).
+  // Dejalos vacíos ("") los que no quieras mostrar.
+  telefonoVisible: "236-4316208", // el número tal cual se lee, para mostrar en el PDF (no hace falta código de país acá)
+  direccion: "",                  // ej: "Barrio Centenario, Junín" (opcional)
+  email: "",                      // ej: "eltony.electricidad@gmail.com" (opcional)
+  instagram: "",                  // ej: "@eltony.electricidad" (opcional)
 
   // Link de "Publicar en la web" del Google Sheet, formato CSV.
   // Dejalo vacío ("") para usar el catálogo de ejemplo mientras probás la herramienta.
@@ -767,6 +779,18 @@ document.getElementById("btnPdf").addEventListener("click", ()=>{
     ${zona ? zona + "<br>" : ""}
     Presupuesto válido por ${validez} días.
   `;
+
+  // Pie de página con los datos de contacto del profesional, solo para el PDF impreso
+  const datosContacto = [
+    CONFIG.telefonoVisible ? `📞 ${CONFIG.telefonoVisible}` : "",
+    CONFIG.email ? `✉️ ${CONFIG.email}` : "",
+    CONFIG.instagram ? `📷 ${CONFIG.instagram}` : "",
+    CONFIG.direccion ? `📍 ${CONFIG.direccion}` : ""
+  ].filter(Boolean).join("  ·  ");
+
+  document.getElementById("printFooterInfo").innerHTML = datosContacto
+    ? `<b style="display:block; margin-bottom:2px;">${CONFIG.nombre}</b>${datosContacto}`
+    : "";
 
   window.print();
 });
