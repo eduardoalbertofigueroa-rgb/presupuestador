@@ -4,24 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Presupuestador · Herramienta para oficios</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-  /* ============================================================
-     PRESUPUESTADOR — herramienta genérica para oficios
-     Pensada para que cualquier profesional (electricista, plomero,
-     pintor, técnico de aire acondicionado, etc.) arme presupuestos
-     rápidos con su propia lista de precios.
-
-     CÓMO PERSONALIZARLA (ver también la caja de ayuda al pie de la página):
-     1) Editá el objeto CONFIG más abajo en el <script>: nombre,
-        rubro y WhatsApp del profesional.
-     2) Editá el array CATALOGO con los ítems, unidades y precios
-        de ESE oficio. Cada profesional tiene su propia lista.
-     3) Más adelante, este CATALOGO se puede reemplazar por un
-        fetch a un Google Sheet publicado como CSV (igual que en
-        Junín Conecta / Junín Conecta Market), para que cada
-        profesional edite sus precios sin tocar código.
-     ============================================================ */
-
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
 
   :root{
@@ -56,7 +40,6 @@
   h1,h2,h3{font-family:'Space Grotesk', sans-serif; margin:0;}
   a{color:inherit;}
 
-  /* ---------- Header ---------- */
   header{
     padding:22px 20px 18px;
     max-width:1180px;
@@ -88,8 +71,8 @@
     color:var(--ink-soft);
   }
   .ticket-badge b{color:var(--ink);}
+  .header-right{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
 
-  /* ---------- Layout ---------- */
   .wrap{
     max-width:1180px;
     margin:0 auto;
@@ -114,7 +97,6 @@
 
   .panel h2{font-size:15px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin-bottom:14px;}
 
-  /* ---------- Catálogo ---------- */
   .search{
     width:100%;
     padding:11px 14px;
@@ -162,7 +144,6 @@
 
   .empty-note{font-size:13px; color:var(--ink-soft); padding:8px 4px;}
 
-  /* ---------- Ticket / resumen ---------- */
   .ticket{
     position:sticky; top:16px;
     background:var(--card);
@@ -253,8 +234,8 @@
   .btn-primary:hover{background:#D6922F;}
   .btn-outline{background:transparent; border:1px solid var(--ink); color:var(--ink);}
   .btn-outline:hover{background:var(--ink); color:var(--paper);}
+  .btn-small{padding:9px 14px; font-size:13px;}
 
-  /* ---------- Ayuda / personalización ---------- */
   .help-box{
     max-width:1180px; margin:32px auto 60px; padding:0 20px;
   }
@@ -266,7 +247,6 @@
   .help-box p, .help-box li{font-size:13.5px; color:var(--ink-soft); line-height:1.55;}
   .help-box code{background:var(--paper); padding:1px 6px; border-radius:4px; font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--ink);}
 
-  /* ---------- Pantalla de bloqueo ---------- */
   .lock-overlay{
     display:none; position:fixed; inset:0; background:var(--paper);
     align-items:center; justify-content:center; z-index:100; padding:20px;
@@ -279,8 +259,9 @@
   .lock-icon{font-size:34px; margin-bottom:10px;}
   .lock-box h2{font-size:19px; margin-bottom:10px;}
   .lock-box p{font-size:13.5px; color:var(--ink-soft); margin-bottom:20px; line-height:1.5;}
+  .lock-box .field{text-align:left;}
+  .lock-box .field label{font-size:12.5px;}
 
-  /* ---------- Modal Mi catálogo ---------- */
   .modal-overlay{
     display:none; position:fixed; inset:0; background:rgba(21,27,30,.55);
     align-items:center; justify-content:center; z-index:50; padding:16px;
@@ -293,7 +274,6 @@
   .modal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
   .modal-head h3{font-size:17px;}
   .modal-close{background:none; border:none; font-size:18px; cursor:pointer; color:var(--ink-soft);}
-  .pin-error{color:#B3261E; font-size:12.5px; margin-top:8px;}
   .warn-box{
     background:#FBF0DD; border:1px solid var(--accent); color:var(--accent-deep);
     font-size:12.5px; padding:10px 12px; border-radius:8px; margin-bottom:16px;
@@ -315,8 +295,8 @@
   .admin-item .del-icon{color:#B3261E;}
   .save-note{font-size:12.5px; color:var(--ok); margin-top:10px;}
   .admin-cat-label{font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--accent-deep); font-weight:700; margin:14px 0 4px;}
+  .field-error{color:#B3261E; font-size:12.5px; margin-top:8px; display:none;}
 
-  /* ---------- Barra fija mobile ---------- */
   .mobile-bar{
     display:none;
     position:fixed; bottom:0; left:0; right:0;
@@ -336,7 +316,6 @@
     .ticket{position:static;}
   }
 
-  /* ---------- Impresión (para "Descargar PDF") ---------- */
   .print-only{display:none;}
   @media print{
     header, .help-box, .catalogo-panel, .mobile-bar, .ticket-actions, .no-print{display:none !important;}
@@ -356,13 +335,55 @@
 </head>
 <body>
 
-  <!-- Pantalla de bloqueo (prueba vencida / licencia inactiva) -->
+  <!-- Pantalla de login / registro -->
+  <div class="lock-overlay open" id="authOverlay">
+    <div class="lock-box">
+      <div class="lock-icon">🧾</div>
+      <h2 id="authTitle">Ingresá a tu cuenta</h2>
+      <p>Accedé con tu email para ver tu catálogo y armar presupuestos.</p>
+
+      <div class="field">
+        <label for="authEmail">Email</label>
+        <input type="email" id="authEmail" placeholder="tu@email.com">
+      </div>
+      <div class="field">
+        <label for="authPassword">Contraseña</label>
+        <input type="password" id="authPassword" placeholder="••••••••">
+      </div>
+
+      <div id="authRegisterFields" style="display:none;">
+        <div class="field">
+          <label for="authBusinessName">Nombre de tu negocio</label>
+          <input type="text" id="authBusinessName" placeholder="Ej: El Tony Electricidad">
+        </div>
+        <div class="field">
+          <label for="authTrade">Rubro</label>
+          <input type="text" id="authTrade" placeholder="Ej: Electricidad y Aire Acondicionado">
+        </div>
+        <div class="field">
+          <label for="authWhatsapp">Tu WhatsApp (con código de país, sin +)</label>
+          <input type="text" id="authWhatsapp" placeholder="5492364316208">
+        </div>
+      </div>
+
+      <p class="field-error" id="authError"></p>
+
+      <button class="btn btn-primary" id="authSubmit" style="width:100%; margin-top:6px;">Ingresar</button>
+      <p style="margin-top:14px; font-size:13px;">
+        <span id="authToggleText">¿No tenés cuenta?</span>
+        <a href="#" id="authToggleLink" style="color:var(--accent-deep); font-weight:600;">Registrate acá</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- Pantalla de suscripción vencida -->
   <div class="lock-overlay" id="lockOverlay">
     <div class="lock-box">
       <div class="lock-icon">🔒</div>
-      <h2>Tu período de prueba terminó</h2>
-      <p id="lockMsg">Para seguir usando el Presupuestador, escribinos y te activamos el acceso.</p>
-      <a id="lockWhatsapp" class="btn btn-primary" href="#" target="_blank" rel="noopener">📲 Activar mi acceso por WhatsApp</a>
+      <h2 id="lockTitle">Tu período de prueba terminó</h2>
+      <p id="lockMsg">Para seguir usando el Presupuestador, renová tu suscripción.</p>
+      <a id="lockWhatsapp" class="btn btn-primary" href="#" target="_blank" rel="noopener">💳 Pagar y renovar suscripción</a>
+      <button class="btn btn-outline" id="btnLogoutLock" style="width:100%; margin-top:9px;">Cerrar sesión</button>
     </div>
   </div>
 
@@ -371,22 +392,23 @@
       <div class="mark">₽</div>
       <div>
         <h1>Presupuestador</h1>
-        <div class="sub" id="subRubro">Electricidad &amp; Aire Acondicionado — plantilla genérica para oficios</div>
+        <div class="sub" id="subRubro">Plantilla para oficios</div>
       </div>
     </div>
-    <div class="ticket-badge">Presupuesto <b id="ticketNumHeader">Nº 0001</b></div>
-    <button class="btn btn-outline no-print" id="btnAdmin" style="padding:9px 14px; font-size:13px;">🔧 Mi catálogo</button>
+    <div class="header-right no-print">
+      <div class="ticket-badge">Presupuesto <b id="ticketNumHeader">Nº 0001</b></div>
+      <button class="btn btn-outline btn-small" id="btnAdmin">🔧 Mi catálogo</button>
+      <button class="btn btn-outline btn-small" id="btnLogout">Salir</button>
+    </div>
   </header>
 
   <main class="wrap">
-    <!-- Catálogo -->
     <section class="panel catalogo-panel">
       <h2>Catálogo de precios</h2>
       <input type="text" class="search" id="searchInput" placeholder="Buscar ítem... ej: térmica, split, toma">
       <div id="catalogoContainer"></div>
     </section>
 
-    <!-- Ticket / presupuesto -->
     <div class="ticket" id="ticket">
       <div class="ticket-top">
         <span class="stamp">PRESUPUESTO</span>
@@ -441,21 +463,6 @@
     <button id="mbScroll">Ver detalle ↑</button>
   </div>
 
-  <div class="help-box no-print">
-    <details>
-      <summary>⚙️ Cómo personalizar esta herramienta para tu oficio</summary>
-      <p style="margin-top:10px">Esta plantilla sirve para cualquier oficio: electricista, plomero, pintor, gasista, técnico de aire, etc. Se personaliza en 4 pasos, sin programar de cero:</p>
-      <ol>
-        <li><b>Creá un Google Sheet</b> con estas 5 columnas en la primera fila: <code>ID | Categoria | Nombre | Unidad | Precio</code>. En "Categoria" escribí <code>Materiales</code> o <code>Mano de obra</code>.</li>
-        <li><b>Publicalo como CSV:</b> Archivo → Compartir → Publicar en la web → elegí formato CSV → copiá el link.</li>
-        <li><b>Armá el Apps Script</b> (te lo dejamos armado más abajo) para poder agregar/editar/borrar ítems desde botones, sin entrar nunca al Sheet. Extensiones → Apps Script, pegás el código, elegís un PIN, y lo "Implementás" como Aplicación web.</li>
-        <li><b>Pegá las 2 URLs y tu PIN</b> en el objeto <code>CONFIG</code> al principio del <code>&lt;script&gt;</code> de este archivo: <code>catalogCsvUrl</code>, <code>scriptUrl</code> y <code>catalogPin</code>.</li>
-        <li><b>(Opcional) Período de prueba:</b> agregá una pestaña llamada <code>Licencia</code> en el Sheet, con <code>SI</code> en la celda A2 y una fecha de vencimiento en B2 (ej: 16/07/2026). Mientras esa fecha no pase, la herramienta funciona normal. Para cortar el acceso antes de tiempo, cambiá A2 a <code>NO</code>. Para renovar, actualizá la fecha de B2.</li>
-      </ol>
-      <p>Una vez conectado, tocando el botón <b>"🔧 Mi catálogo"</b> arriba de la página, el profesional puede agregar, editar o borrar sus propios ítems con botones simples — nunca ve la planilla, así que no hay riesgo de que borre algo sin querer.</p>
-    </details>
-  </div>
-
   <!-- Modal: Mi catálogo -->
   <div class="modal-overlay no-print" id="adminModal">
     <div class="modal-box">
@@ -464,194 +471,171 @@
         <button class="modal-close" id="adminClose">✕</button>
       </div>
 
-      <div id="pinGate">
-        <p style="font-size:13.5px; color:var(--ink-soft); margin:0 0 12px;">Ingresá tu PIN para agregar, editar o borrar ítems.</p>
-        <div class="field">
-          <input type="password" id="pinInput" placeholder="PIN" inputmode="numeric">
+      <div class="admin-add">
+        <h4>+ Agregar ítem</h4>
+        <div class="admin-add-grid">
+          <input type="text" id="addNombre" placeholder="Nombre del ítem">
+          <select id="addCategoria">
+            <option value="material">Materiales</option>
+            <option value="labor">Mano de obra</option>
+          </select>
+          <input type="text" id="addUnidad" placeholder="Unidad (m, un, hs)">
+          <input type="number" id="addPrecio" placeholder="Precio $">
+          <button class="btn btn-primary" id="addBtn">Agregar</button>
         </div>
-        <button class="btn btn-primary" id="pinEnter">Entrar</button>
-        <p class="pin-error" id="pinError" style="display:none;">PIN incorrecto.</p>
       </div>
 
-      <div id="adminContent" style="display:none;">
-        <div id="scriptWarning" style="display:none;" class="warn-box">
-          Todavía no conectaste el Apps Script (<code>scriptUrl</code> vacío en CONFIG). Podés ver el catálogo pero no guardar cambios. Mirá la guía "⚙️ Cómo personalizar" al pie de la página principal.
-        </div>
-
-        <div class="admin-add">
-          <h4>+ Agregar ítem</h4>
-          <div class="admin-add-grid">
-            <input type="text" id="addNombre" placeholder="Nombre del ítem">
-            <select id="addCategoria">
-              <option value="material">Materiales</option>
-              <option value="labor">Mano de obra</option>
-            </select>
-            <input type="text" id="addUnidad" placeholder="Unidad (m, un, hs)">
-            <input type="number" id="addPrecio" placeholder="Precio $">
-            <button class="btn btn-primary" id="addBtn">Agregar</button>
-          </div>
-        </div>
-
-        <div id="adminList"></div>
-        <p class="save-note" id="saveNote" style="display:none;">✅ Guardado. Puede tardar unos segundos en reflejarse si recargás la página.</p>
-      </div>
+      <div id="adminList"></div>
+      <p class="save-note" id="saveNote" style="display:none;">✅ Guardado.</p>
     </div>
   </div>
 
 <script>
-/* ================== CONFIGURACIÓN DEL PROFESIONAL ================== */
-const CONFIG = {
-  nombre: "El Tony — Electricidad y Aire Acondicionado",
-  rubro: "Electricidad & Aire Acondicionado",
-  whatsapp: "5492364316208", // número del profesional, con código de país sin '+' ni espacios
+/* ================== CONEXIÓN A SUPABASE ================== */
+const SUPABASE_URL = "https://chtpiyddqjcpbpxpnolo.supabase.co";
+const SUPABASE_KEY = "sb_publishable_PqTfEpdmzLj42gBvUqM1qQ_YQQA9d0W";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  // Datos de contacto que van a aparecer al pie del presupuesto (PDF y WhatsApp).
-  // Dejalos vacíos ("") los que no quieras mostrar.
-  telefonoVisible: "236-4316208", // el número tal cual se lee, para mostrar en el PDF (no hace falta código de país acá)
-  direccion: "",                  // ej: "Barrio Centenario, Junín" (opcional)
-  email: "",                      // ej: "eltony.electricidad@gmail.com" (opcional)
-  instagram: "",                  // ej: "@eltony.electricidad" (opcional)
+// Tu WhatsApp para que te lleguen las consultas de pago (el de Junín Conecta)
+const WHATSAPP_ADMIN = "5492364696480";
 
-  // Link de "Publicar en la web" del Google Sheet, formato CSV.
-  // Dejalo vacío ("") para usar el catálogo de ejemplo mientras probás la herramienta.
-  catalogCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRQE_h9cyHLsFA1ZTrd12YmXvjyuGLCJrXAoL6fLp2cjE5Ml-1sEReQzANjx7B59iX7zsvEsITn2_MY/pub?output=csv",
+let profile = null;     // fila de public.profiles del usuario logueado
+let CATALOGO = [];       // catálogo del usuario logueado, desde public.catalogs
+let presupuesto = {};    // { id: cantidad }
+let modoRegistro = false;
 
-  // URL de tu Apps Script (Aplicación web) para agregar/editar/borrar ítems.
-  // Dejalo vacío ("") mientras no lo tengas configurado.
-  scriptUrl: "https://script.google.com/macros/s/AKfycbxoHBwr2yjPHGBREiJIhohC_TAYBezSxAjJT9iZVx7GPhUo_YLi5imyQ_qLkGqWHtUMiw/exec",
+const money = n => "$ " + Math.round(n).toLocaleString("es-AR");
+const ticketNumero = "0" + (Math.floor(Math.random()*900)+100);
+document.getElementById("ticketNumHeader").textContent = "Nº " + ticketNumero;
+document.getElementById("ticketNum").innerHTML = "Nº " + ticketNumero + " · <span id='ticketFecha'></span>";
+document.getElementById("ticketFecha").textContent = new Date().toLocaleDateString("es-AR");
 
-  // PIN para entrar al panel "🔧 Mi catálogo". Cambialo por uno propio.
-  catalogPin: "0612"
-};
+/* ================== LOGIN / REGISTRO ================== */
+document.getElementById("authToggleLink").addEventListener("click", (e)=>{
+  e.preventDefault();
+  modoRegistro = !modoRegistro;
+  document.getElementById("authRegisterFields").style.display = modoRegistro ? "block" : "none";
+  document.getElementById("authTitle").textContent = modoRegistro ? "Creá tu cuenta" : "Ingresá a tu cuenta";
+  document.getElementById("authSubmit").textContent = modoRegistro ? "Crear cuenta" : "Ingresar";
+  document.getElementById("authToggleText").textContent = modoRegistro ? "¿Ya tenés cuenta?" : "¿No tenés cuenta?";
+  document.getElementById("authToggleLink").textContent = modoRegistro ? "Iniciá sesión" : "Registrate acá";
+  document.getElementById("authError").style.display = "none";
+});
 
-/* ================== CATÁLOGO DE EJEMPLO (fallback) ==================
-   Se usa solo si CONFIG.catalogCsvUrl está vacío, para poder probar la
-   herramienta sin haber conectado todavía un Google Sheet propio.
-   categoria: "material" o "labor"
-   unidad: "m" (metro), "un" (unidad), "hs" (hora), etc.
-============================================================ */
-const CATALOGO_DEMO = [
-  { id:1, categoria:"material", nombre:"Cable unipolar 2.5mm", unidad:"m", precio:1200 },
-  { id:2, categoria:"material", nombre:"Cable unipolar 4mm", unidad:"m", precio:1800 },
-  { id:3, categoria:"material", nombre:"Térmica / breaker 16A", unidad:"un", precio:8500 },
-  { id:4, categoria:"material", nombre:"Térmica / breaker 20A", unidad:"un", precio:9200 },
-  { id:5, categoria:"material", nombre:"Toma corriente simple", unidad:"un", precio:3200 },
-  { id:6, categoria:"material", nombre:"Toma corriente doble", unidad:"un", precio:4100 },
-  { id:7, categoria:"material", nombre:"Caño corrugado 3/4\"", unidad:"m", precio:650 },
-  { id:8, categoria:"material", nombre:"Caja rectangular embutir", unidad:"un", precio:1400 },
-  { id:9, categoria:"labor", nombre:"Instalación de toma corriente", unidad:"un", precio:6000 },
-  { id:10, categoria:"labor", nombre:"Instalación de punto de luz", unidad:"un", precio:7000 },
-  { id:11, categoria:"labor", nombre:"Instalación de térmica en tablero", unidad:"un", precio:9000 },
-  { id:12, categoria:"labor", nombre:"Instalación split hasta 3000 frig.", unidad:"un", precio:45000 },
-  { id:13, categoria:"labor", nombre:"Instalación split más de 3000 frig.", unidad:"un", precio:60000 },
-  { id:14, categoria:"labor", nombre:"Tendido de cañería para split", unidad:"m", precio:3500 },
-  { id:15, categoria:"labor", nombre:"Diagnóstico de instalación eléctrica", unidad:"un", precio:8000 },
-];
+function mostrarErrorAuth(msg){
+  const el = document.getElementById("authError");
+  el.textContent = msg;
+  el.style.display = "block";
+}
 
-let CATALOGO = [];
+document.getElementById("authSubmit").addEventListener("click", async ()=>{
+  const email = document.getElementById("authEmail").value.trim();
+  const password = document.getElementById("authPassword").value;
+  if(!email || !password){ mostrarErrorAuth("Completá email y contraseña."); return; }
 
-/* ================== CHEQUEO DE LICENCIA ================== */
-async function chequearLicencia(){
-  if(!CONFIG.scriptUrl) return true; // sin Apps Script conectado, no bloqueamos nada
+  document.getElementById("authSubmit").disabled = true;
 
-  try{
-    const res = await fetch(CONFIG.scriptUrl, {
-      method:"POST",
-      body: JSON.stringify({ action:"check" })
+  if(modoRegistro){
+    const business_name = document.getElementById("authBusinessName").value.trim();
+    const trade = document.getElementById("authTrade").value.trim();
+    const whatsapp = document.getElementById("authWhatsapp").value.trim();
+    if(!business_name || !trade || !whatsapp){
+      mostrarErrorAuth("Completá nombre de negocio, rubro y WhatsApp.");
+      document.getElementById("authSubmit").disabled = false;
+      return;
+    }
+
+    const { data, error } = await sb.auth.signUp({ email, password });
+    if(error){ mostrarErrorAuth(error.message); document.getElementById("authSubmit").disabled = false; return; }
+
+    // 7 días de prueba gratis desde hoy
+    const vence = new Date();
+    vence.setDate(vence.getDate() + 7);
+    const trial_vence = vence.toISOString().slice(0,10);
+
+    const { error: perfilError } = await sb.from("profiles").insert({
+      id: data.user.id, business_name, trade, whatsapp, trial_vence, suscripcion_activa: true
     });
-    const data = await res.json();
-    if(data.activo === false){
-      const msg = data.vence
-        ? `Tu prueba venció el ${data.vence}. Escribinos y te activamos el acceso.`
-        : `Tu acceso está desactivado por ahora. Escribinos y lo resolvemos.`;
-      document.getElementById("lockMsg").textContent = msg;
-      document.getElementById("lockWhatsapp").href =
-        `https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent("Hola, quiero activar mi acceso al Presupuestador.")}`;
-      document.getElementById("lockOverlay").classList.add("open");
-      return false;
-    }
-    return true;
-  } catch(err){
-    console.warn("No se pudo chequear la licencia, se permite el acceso.", err);
-    return true; // si falla la consulta, no dejamos a nadie afuera por un error de red
-  }
-}
+    if(perfilError){ mostrarErrorAuth("Error creando el perfil: " + perfilError.message); document.getElementById("authSubmit").disabled = false; return; }
 
-/* ================== CARGA DEL CATÁLOGO (Google Sheet o demo) ================== */
-function parseCSV(text){
-  const rows = [];
-  let row = [], field = "", inQuotes = false;
-  for(let i=0; i<text.length; i++){
-    const c = text[i], next = text[i+1];
-    if(inQuotes){
-      if(c === '"' && next === '"'){ field += '"'; i++; }
-      else if(c === '"'){ inQuotes = false; }
-      else field += c;
-    } else {
-      if(c === '"') inQuotes = true;
-      else if(c === ','){ row.push(field); field=""; }
-      else if(c === '\n' || c === '\r'){
-        if(field!=="" || row.length>0){ row.push(field); rows.push(row); row=[]; field=""; }
-        if(c === '\r' && next === '\n') i++;
-      } else field += c;
-    }
-  }
-  if(field!=="" || row.length>0){ row.push(field); rows.push(row); }
-  return rows;
-}
-
-function catalogoDesdeCSV(text){
-  const rows = parseCSV(text).filter(r => r.length>1 && r[0].trim()!=="");
-  const header = rows[0].map(h=>h.trim().toLowerCase());
-  const idx = {
-    id: header.indexOf("id"),
-    categoria: header.indexOf("categoria"),
-    nombre: header.indexOf("nombre"),
-    unidad: header.indexOf("unidad"),
-    precio: header.indexOf("precio")
-  };
-  return rows.slice(1).map(r=>{
-    const catRaw = (r[idx.categoria]||"").toLowerCase();
-    return {
-      id: r[idx.id],
-      categoria: catRaw.includes("mano") ? "labor" : "material",
-      nombre: r[idx.nombre],
-      unidad: r[idx.unidad],
-      precio: parseFloat((r[idx.precio]||"0").replace(/[^0-9.-]/g,"")) || 0
-    };
-  }).filter(i => i.nombre);
-}
-
-async function cargarCatalogo(){
-  if(CONFIG.catalogCsvUrl){
-    try{
-      const res = await fetch(CONFIG.catalogCsvUrl + (CONFIG.catalogCsvUrl.includes("?") ? "&" : "?") + "_=" + Date.now());
-      const text = await res.text();
-      CATALOGO = catalogoDesdeCSV(text);
-      if(CATALOGO.length===0) throw new Error("Sheet vacío");
-    } catch(err){
-      console.warn("No se pudo cargar el Sheet, usando catálogo de ejemplo.", err);
-      CATALOGO = JSON.parse(JSON.stringify(CATALOGO_DEMO));
-    }
+    await iniciarApp();
   } else {
-    CATALOGO = JSON.parse(JSON.stringify(CATALOGO_DEMO));
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if(error){ mostrarErrorAuth(error.message); document.getElementById("authSubmit").disabled = false; return; }
+    await iniciarApp();
+  }
+  document.getElementById("authSubmit").disabled = false;
+});
+
+document.getElementById("btnLogout").addEventListener("click", async ()=>{
+  await sb.auth.signOut();
+  location.reload();
+});
+document.getElementById("btnLogoutLock").addEventListener("click", async ()=>{
+  await sb.auth.signOut();
+  location.reload();
+});
+
+/* ================== ARRANQUE ================== */
+async function iniciarApp(){
+  const { data: { session } } = await sb.auth.getSession();
+  if(!session){ return; } // se queda en la pantalla de login
+
+  document.getElementById("authOverlay").classList.remove("open");
+
+  const { data: perfilData, error: perfilError } = await sb.from("profiles").select("*").eq("id", session.user.id).single();
+  if(perfilError || !perfilData){
+    mostrarErrorAuth("No se pudo cargar tu perfil. Escribinos si el problema persiste.");
+    document.getElementById("authOverlay").classList.add("open");
+    return;
+  }
+  profile = perfilData;
+
+  document.getElementById("proNombre").textContent = profile.business_name;
+  document.getElementById("subRubro").textContent = profile.trade;
+
+  const suscripcionOk = verificarSuscripcion();
+  if(!suscripcionOk) return;
+
+  await cargarCatalogo();
+}
+
+function verificarSuscripcion(){
+  const hoy = new Date().toISOString().slice(0,10);
+  const vencida = profile.trial_vence && profile.trial_vence < hoy;
+  const inactiva = profile.suscripcion_activa === false;
+
+  if(vencida || inactiva){
+    const msg = inactiva
+      ? "Tu suscripción está pausada por ahora."
+      : `Tu período de prueba venció el ${profile.trial_vence}.`;
+    document.getElementById("lockMsg").textContent = msg + " Pagá para reactivar tu acceso.";
+    const texto = `Hola, quiero renovar mi suscripción al Presupuestador. Mi negocio: ${profile.business_name}. Mi email: ${document.getElementById("authEmail").value || ""}`;
+    document.getElementById("lockWhatsapp").href = `https://wa.me/${WHATSAPP_ADMIN}?text=${encodeURIComponent(texto)}`;
+    document.getElementById("lockOverlay").classList.add("open");
+    return false;
+  }
+  return true;
+}
+
+sb.auth.onAuthStateChange((event)=>{
+  if(event === "SIGNED_IN") iniciarApp();
+});
+iniciarApp();
+
+/* ================== CATÁLOGO (Supabase) ================== */
+async function cargarCatalogo(){
+  const { data, error } = await sb.from("catalogs").select("*").eq("user_id", profile.id).order("created_at");
+  if(error){ console.error(error); CATALOGO = []; }
+  else {
+    CATALOGO = data.map(i => ({
+      id: i.id, categoria: i.category, nombre: i.name, unidad: i.unit, precio: Number(i.price)
+    }));
   }
   renderCatalogo();
   renderTicket();
   renderAdminList();
 }
-
-/* ================== ESTADO ================== */
-let presupuesto = {}; // { id: cantidad }
-const ticketNumero = "0" + (Math.floor(Math.random()*900)+100);
-
-document.getElementById("proNombre").textContent = CONFIG.nombre;
-document.getElementById("subRubro").textContent = CONFIG.rubro + " — plantilla genérica para oficios";
-document.getElementById("ticketNumHeader").textContent = "Nº " + ticketNumero;
-document.getElementById("ticketNum").innerHTML = "Nº " + ticketNumero + " · <span id='ticketFecha'></span>";
-document.getElementById("ticketFecha").textContent = new Date().toLocaleDateString("es-AR");
-
-const money = n => "$ " + Math.round(n).toLocaleString("es-AR");
 
 function renderCatalogo(filter=""){
   const cont = document.getElementById("catalogoContainer");
@@ -682,7 +666,11 @@ function renderCatalogo(filter=""){
     html += `</div>`;
   });
 
-  if(html==="") html = `<p class="empty-note">No encontramos ítems para "${filter}".</p>`;
+  if(html==="" && CATALOGO.length===0){
+    html = `<p class="empty-note">Todavía no cargaste ítems. Abrí "🔧 Mi catálogo" para agregar tus primeros materiales y mano de obra.</p>`;
+  } else if(html===""){
+    html = `<p class="empty-note">No encontramos ítems para "${filter}".</p>`;
+  }
   cont.innerHTML = html;
 }
 
@@ -704,7 +692,8 @@ function renderTicket(){
     cont.innerHTML = `<div class="empty-note" id="emptyNote">Todavía no agregaste ítems. Elegí materiales o mano de obra del catálogo →</div>`;
   } else {
     cont.innerHTML = ids.map(id=>{
-      const item = CATALOGO.find(i=>i.id==id);
+      const item = CATALOGO.find(i=>String(i.id)===String(id));
+      if(!item) return "";
       const qty = presupuesto[id];
       const monto = item.precio * qty;
       return `
@@ -720,7 +709,8 @@ function renderTicket(){
 
   let subMateriales = 0, subManoObra = 0;
   ids.forEach(id=>{
-    const item = CATALOGO.find(i=>i.id==id);
+    const item = CATALOGO.find(i=>String(i.id)===String(id));
+    if(!item) return;
     const monto = item.precio * presupuesto[id];
     if(item.categoria==="material") subMateriales += monto;
     else subManoObra += monto;
@@ -750,12 +740,13 @@ document.getElementById("btnWhatsapp").addEventListener("click", ()=>{
   const zona = document.getElementById("clienteZona").value;
   const validez = document.getElementById("validez").value || "7";
 
-  let texto = `*Presupuesto Nº ${ticketNumero}* — ${CONFIG.nombre}\n`;
+  let texto = `*Presupuesto Nº ${ticketNumero}* — ${profile.business_name}\n`;
   texto += `Cliente: ${cliente}\n`;
   if(zona) texto += `Dirección/zona: ${zona}\n`;
   texto += `Fecha: ${new Date().toLocaleDateString("es-AR")}\n\n`;
   ids.forEach(id=>{
-    const item = CATALOGO.find(i=>i.id==id);
+    const item = CATALOGO.find(i=>String(i.id)===String(id));
+    if(!item) return;
     const qty = presupuesto[id];
     texto += `• ${item.nombre} — ${qty} ${item.unidad} = ${money(item.precio*qty)}\n`;
   });
@@ -780,57 +771,19 @@ document.getElementById("btnPdf").addEventListener("click", ()=>{
     Presupuesto válido por ${validez} días.
   `;
 
-  // Pie de página con los datos de contacto del profesional, solo para el PDF impreso
-  const datosContacto = [
-    CONFIG.telefonoVisible ? `📞 ${CONFIG.telefonoVisible}` : "",
-    CONFIG.email ? `✉️ ${CONFIG.email}` : "",
-    CONFIG.instagram ? `📷 ${CONFIG.instagram}` : "",
-    CONFIG.direccion ? `📍 ${CONFIG.direccion}` : ""
-  ].filter(Boolean).join("  ·  ");
-
-  document.getElementById("printFooterInfo").innerHTML = datosContacto
-    ? `<b style="display:block; margin-bottom:2px;">${CONFIG.nombre}</b>${datosContacto}`
-    : "";
+  document.getElementById("printFooterInfo").innerHTML =
+    `<b style="display:block; margin-bottom:2px;">${profile.business_name}</b>📞 ${profile.whatsapp}`;
 
   window.print();
 });
 
-renderTicket();
-(async ()=>{
-  const habilitado = await chequearLicencia();
-  if(habilitado) cargarCatalogo();
-})();
-
 /* ================== PANEL "MI CATÁLOGO" ================== */
-let pinOk = false;
-
-function abrirAdmin(){
+document.getElementById("btnAdmin").addEventListener("click", ()=>{
   document.getElementById("adminModal").classList.add("open");
-  document.getElementById("scriptWarning").style.display = CONFIG.scriptUrl ? "none" : "block";
-  if(pinOk){
-    document.getElementById("pinGate").style.display = "none";
-    document.getElementById("adminContent").style.display = "block";
-    renderAdminList();
-  }
-}
-function cerrarAdmin(){ document.getElementById("adminModal").classList.remove("open"); }
-
-document.getElementById("btnAdmin").addEventListener("click", abrirAdmin);
-document.getElementById("adminClose").addEventListener("click", cerrarAdmin);
-document.getElementById("adminModal").addEventListener("click", e=>{ if(e.target.id==="adminModal") cerrarAdmin(); });
-
-document.getElementById("pinEnter").addEventListener("click", ()=>{
-  const val = document.getElementById("pinInput").value;
-  if(val === CONFIG.catalogPin){
-    pinOk = true;
-    document.getElementById("pinGate").style.display = "none";
-    document.getElementById("adminContent").style.display = "block";
-    document.getElementById("pinError").style.display = "none";
-    renderAdminList();
-  } else {
-    document.getElementById("pinError").style.display = "block";
-  }
+  renderAdminList();
 });
+document.getElementById("adminClose").addEventListener("click", ()=> document.getElementById("adminModal").classList.remove("open"));
+document.getElementById("adminModal").addEventListener("click", e=>{ if(e.target.id==="adminModal") document.getElementById("adminModal").classList.remove("open"); });
 
 function renderAdminList(){
   const cont = document.getElementById("adminList");
@@ -860,24 +813,6 @@ function renderAdminList(){
   cont.innerHTML = html;
 }
 
-async function postToScript(payload){
-  if(!CONFIG.scriptUrl){
-    alert("Falta conectar el Apps Script (scriptUrl vacío en CONFIG). Mirá la guía de personalización al pie de la página.");
-    return { ok:false };
-  }
-  try{
-    const res = await fetch(CONFIG.scriptUrl, {
-      method:"POST",
-      body: JSON.stringify({ pin: CONFIG.catalogPin, ...payload })
-    });
-    return await res.json();
-  } catch(err){
-    console.error(err);
-    alert("No se pudo conectar con el Apps Script. Revisá la URL en CONFIG.");
-    return { ok:false };
-  }
-}
-
 document.getElementById("addBtn").addEventListener("click", async ()=>{
   const nombre = document.getElementById("addNombre").value.trim();
   const categoria = document.getElementById("addCategoria").value;
@@ -885,14 +820,17 @@ document.getElementById("addBtn").addEventListener("click", async ()=>{
   const precio = parseFloat(document.getElementById("addPrecio").value) || 0;
   if(!nombre || precio<=0){ alert("Completá nombre y precio."); return; }
 
-  const resp = await postToScript({ action:"add", nombre, categoria, unidad, precio });
-  if(resp.ok){
-    CATALOGO.push({ id: resp.id || ("tmp"+Date.now()), categoria, nombre, unidad, precio });
-    document.getElementById("addNombre").value = "";
-    document.getElementById("addPrecio").value = "";
-    renderAdminList(); renderCatalogo();
-    mostrarGuardado();
-  }
+  const { data, error } = await sb.from("catalogs").insert({
+    user_id: profile.id, category: categoria, name: nombre, unit: unidad, price: precio
+  }).select().single();
+
+  if(error){ alert("No se pudo guardar: " + error.message); return; }
+
+  CATALOGO.push({ id: data.id, categoria, nombre, unidad, precio });
+  document.getElementById("addNombre").value = "";
+  document.getElementById("addPrecio").value = "";
+  renderAdminList(); renderCatalogo();
+  mostrarGuardado();
 });
 
 async function guardarItem(id){
@@ -902,23 +840,26 @@ async function guardarItem(id){
   const unidad = row.querySelector(".a-unidad").value.trim();
   const precio = parseFloat(row.querySelector(".a-precio").value) || 0;
 
-  const resp = await postToScript({ action:"edit", id, nombre, categoria, unidad, precio });
-  if(resp.ok){
-    const item = CATALOGO.find(i=>String(i.id)===String(id));
-    if(item){ item.nombre=nombre; item.categoria=categoria; item.unidad=unidad; item.precio=precio; }
-    renderCatalogo();
-    mostrarGuardado();
-  }
+  const { error } = await sb.from("catalogs").update({
+    category: categoria, name: nombre, unit: unidad, price: precio
+  }).eq("id", id);
+
+  if(error){ alert("No se pudo guardar: " + error.message); return; }
+
+  const item = CATALOGO.find(i=>String(i.id)===String(id));
+  if(item){ item.nombre=nombre; item.categoria=categoria; item.unidad=unidad; item.precio=precio; }
+  renderCatalogo();
+  mostrarGuardado();
 }
 
 async function borrarItem(id){
   if(!confirm("¿Borrar este ítem del catálogo?")) return;
-  const resp = await postToScript({ action:"delete", id });
-  if(resp.ok){
-    CATALOGO = CATALOGO.filter(i=>String(i.id)!==String(id));
-    renderAdminList(); renderCatalogo();
-    mostrarGuardado();
-  }
+  const { error } = await sb.from("catalogs").delete().eq("id", id);
+  if(error){ alert("No se pudo borrar: " + error.message); return; }
+
+  CATALOGO = CATALOGO.filter(i=>String(i.id)!==String(id));
+  renderAdminList(); renderCatalogo();
+  mostrarGuardado();
 }
 
 function mostrarGuardado(){
