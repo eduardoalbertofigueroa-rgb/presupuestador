@@ -364,6 +364,14 @@
           <label for="authWhatsapp">Tu WhatsApp (con código de país, sin +)</label>
           <input type="text" id="authWhatsapp" placeholder="5492364316208">
         </div>
+        <div class="field">
+          <label for="authDireccion">Dirección (opcional)</label>
+          <input type="text" id="authDireccion" placeholder="Ej: Barrio Centenario, Junín">
+        </div>
+        <div class="field">
+          <label for="authLogoUrl">Link a tu logo (opcional)</label>
+          <input type="text" id="authLogoUrl" placeholder="Link de Google Drive, Imgur, etc.">
+        </div>
       </div>
 
       <p class="field-error" id="authError"></p>
@@ -398,6 +406,7 @@
     <div class="header-right no-print">
       <div class="ticket-badge">Presupuesto <b id="ticketNumHeader">Nº 0001</b></div>
       <button class="btn btn-outline btn-small" id="btnAdmin">🔧 Mi catálogo</button>
+      <button class="btn btn-outline btn-small" id="btnPerfil">🏢 Mi perfil</button>
       <button class="btn btn-outline btn-small" id="btnLogout">Salir</button>
     </div>
   </header>
@@ -415,6 +424,8 @@
         <h2 id="proNombre">Presupuesto de trabajo</h2>
         <div class="n mono" id="ticketNum">Nº 0001 · <span id="ticketFecha"></span></div>
       </div>
+
+      <div id="printMembrete" class="print-only" style="text-align:center; padding-top:16px;"></div>
 
       <div class="ticket-body no-print">
         <div class="field">
@@ -490,6 +501,49 @@
     </div>
   </div>
 
+  <!-- Modal: Mi perfil -->
+  <div class="modal-overlay no-print" id="perfilModal">
+    <div class="modal-box" style="max-width:420px;">
+      <div class="modal-head">
+        <h3>🏢 Mi perfil</h3>
+        <button class="modal-close" id="perfilClose">✕</button>
+      </div>
+
+      <p style="font-size:12.5px; color:var(--ink-soft); margin-bottom:14px;">
+        Estos datos aparecen como membrete en tus presupuestos en PDF.
+      </p>
+
+      <div class="field">
+        <label for="perfilBusinessName">Nombre de tu negocio</label>
+        <input type="text" id="perfilBusinessName">
+      </div>
+      <div class="field">
+        <label for="perfilTrade">Rubro</label>
+        <input type="text" id="perfilTrade">
+      </div>
+      <div class="field">
+        <label for="perfilWhatsapp">WhatsApp (con código de país, sin +)</label>
+        <input type="text" id="perfilWhatsapp">
+      </div>
+      <div class="field">
+        <label for="perfilDireccion">Dirección (opcional)</label>
+        <input type="text" id="perfilDireccion" placeholder="Ej: Barrio Centenario, Junín">
+      </div>
+      <div class="field">
+        <label for="perfilLogoUrl">Link a tu logo (opcional)</label>
+        <input type="text" id="perfilLogoUrl" placeholder="Link de Google Drive, Imgur, etc.">
+      </div>
+
+      <div id="perfilLogoPreviewWrap" style="display:none; margin-bottom:14px; text-align:center;">
+        <img id="perfilLogoPreview" style="max-width:120px; max-height:80px; border-radius:6px;" alt="Vista previa del logo">
+      </div>
+
+      <p class="field-error" id="perfilError"></p>
+      <button class="btn btn-primary" id="perfilGuardar" style="width:100%;">Guardar cambios</button>
+      <p class="save-note" id="perfilSaveNote" style="display:none; text-align:center;">✅ Perfil actualizado.</p>
+    </div>
+  </div>
+
 <script>
 /* ================== CONEXIÓN A SUPABASE ================== */
 const SUPABASE_URL = "https://chtpiyddqjcpbpxpnolo.supabase.co";
@@ -539,6 +593,8 @@ document.getElementById("authSubmit").addEventListener("click", async ()=>{
     const business_name = document.getElementById("authBusinessName").value.trim();
     const trade = document.getElementById("authTrade").value.trim();
     const whatsapp = document.getElementById("authWhatsapp").value.trim();
+    const direccion = document.getElementById("authDireccion").value.trim();
+    const logo_url = document.getElementById("authLogoUrl").value.trim();
     if(!business_name || !trade || !whatsapp){
       mostrarErrorAuth("Completá nombre de negocio, rubro y WhatsApp.");
       document.getElementById("authSubmit").disabled = false;
@@ -547,7 +603,7 @@ document.getElementById("authSubmit").addEventListener("click", async ()=>{
 
     const { data, error } = await sb.auth.signUp({
       email, password,
-      options: { data: { business_name, trade, whatsapp } }
+      options: { data: { business_name, trade, whatsapp, direccion, logo_url } }
     });
     if(error){ mostrarErrorAuth(error.message); document.getElementById("authSubmit").disabled = false; return; }
 
@@ -595,23 +651,26 @@ async function iniciarApp(){
   document.getElementById("proNombre").textContent = profile.business_name;
   document.getElementById("subRubro").textContent = profile.trade;
 
-  const suscripcionOk = verificarSuscripcion();
+  const suscripcionOk = await verificarSuscripcion();
   if(!suscripcionOk) return;
 
   await cargarCatalogo();
 }
 
-function verificarSuscripcion(){
+async function verificarSuscripcion(){
   const hoy = new Date().toISOString().slice(0,10);
   const vencida = profile.trial_vence && profile.trial_vence < hoy;
   const inactiva = profile.suscripcion_activa === false;
 
   if(vencida || inactiva){
+    const { data: { session } } = await sb.auth.getSession();
+    const email = session ? session.user.email : "";
+
     const msg = inactiva
       ? "Tu suscripción está pausada por ahora."
       : `Tu período de prueba venció el ${profile.trial_vence}.`;
     document.getElementById("lockMsg").textContent = msg + " Pagá para reactivar tu acceso.";
-    const texto = `Hola, quiero renovar mi suscripción al Presupuestador. Mi negocio: ${profile.business_name}. Mi email: ${document.getElementById("authEmail").value || ""}`;
+    const texto = `Hola, quiero renovar mi suscripción al Presupuestador. Mi negocio: ${profile.business_name}. Mi email: ${email}`;
     document.getElementById("lockWhatsapp").href = `https://wa.me/${WHATSAPP_ADMIN}?text=${encodeURIComponent(texto)}`;
     document.getElementById("lockOverlay").classList.add("open");
     return false;
@@ -772,10 +831,83 @@ document.getElementById("btnPdf").addEventListener("click", ()=>{
     Presupuesto válido por ${validez} días.
   `;
 
+  const logoHtml = profile.logo_url ? `<img src="${profile.logo_url}" alt="Logo" style="max-height:64px; max-width:180px; margin-bottom:8px;">` : "";
+  document.getElementById("printMembrete").innerHTML = `
+    ${logoHtml}
+    <div style="font-family:'Space Grotesk', sans-serif; font-weight:700; font-size:15px; color:var(--ink);">${profile.business_name}</div>
+    <div style="font-size:12px; color:var(--ink-soft);">${profile.trade}</div>
+    ${profile.direccion ? `<div style="font-size:12px; color:var(--ink-soft);">📍 ${profile.direccion}</div>` : ""}
+  `;
+
   document.getElementById("printFooterInfo").innerHTML =
     `<b style="display:block; margin-bottom:2px;">${profile.business_name}</b>📞 ${profile.whatsapp}`;
 
   window.print();
+});
+
+/* ================== PANEL "MI PERFIL" ================== */
+document.getElementById("btnPerfil").addEventListener("click", ()=>{
+  document.getElementById("perfilBusinessName").value = profile.business_name || "";
+  document.getElementById("perfilTrade").value = profile.trade || "";
+  document.getElementById("perfilWhatsapp").value = profile.whatsapp || "";
+  document.getElementById("perfilDireccion").value = profile.direccion || "";
+  document.getElementById("perfilLogoUrl").value = profile.logo_url || "";
+  actualizarPreviewLogo();
+  document.getElementById("perfilModal").classList.add("open");
+});
+document.getElementById("perfilClose").addEventListener("click", ()=> document.getElementById("perfilModal").classList.remove("open"));
+document.getElementById("perfilModal").addEventListener("click", e=>{ if(e.target.id==="perfilModal") document.getElementById("perfilModal").classList.remove("open"); });
+
+document.getElementById("perfilLogoUrl").addEventListener("input", actualizarPreviewLogo);
+function actualizarPreviewLogo(){
+  const url = document.getElementById("perfilLogoUrl").value.trim();
+  const wrap = document.getElementById("perfilLogoPreviewWrap");
+  const img = document.getElementById("perfilLogoPreview");
+  if(url){
+    img.src = url;
+    wrap.style.display = "block";
+  } else {
+    wrap.style.display = "none";
+  }
+}
+
+document.getElementById("perfilGuardar").addEventListener("click", async ()=>{
+  const business_name = document.getElementById("perfilBusinessName").value.trim();
+  const trade = document.getElementById("perfilTrade").value.trim();
+  const whatsapp = document.getElementById("perfilWhatsapp").value.trim();
+  const direccion = document.getElementById("perfilDireccion").value.trim();
+  const logo_url = document.getElementById("perfilLogoUrl").value.trim();
+  const errorEl = document.getElementById("perfilError");
+
+  if(!business_name || !trade || !whatsapp){
+    errorEl.textContent = "Completá nombre de negocio, rubro y WhatsApp.";
+    errorEl.style.display = "block";
+    return;
+  }
+  errorEl.style.display = "none";
+
+  const { error } = await sb.from("profiles").update({
+    business_name, trade, whatsapp, direccion, logo_url
+  }).eq("id", profile.id);
+
+  if(error){
+    errorEl.textContent = "No se pudo guardar: " + error.message;
+    errorEl.style.display = "block";
+    return;
+  }
+
+  profile.business_name = business_name;
+  profile.trade = trade;
+  profile.whatsapp = whatsapp;
+  profile.direccion = direccion;
+  profile.logo_url = logo_url;
+
+  document.getElementById("proNombre").textContent = business_name;
+  document.getElementById("subRubro").textContent = trade;
+
+  const note = document.getElementById("perfilSaveNote");
+  note.style.display = "block";
+  setTimeout(()=> note.style.display = "none", 2500);
 });
 
 /* ================== PANEL "MI CATÁLOGO" ================== */
