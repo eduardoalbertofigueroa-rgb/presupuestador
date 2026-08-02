@@ -545,18 +545,19 @@ document.getElementById("authSubmit").addEventListener("click", async ()=>{
       return;
     }
 
-    const { data, error } = await sb.auth.signUp({ email, password });
+    const { data, error } = await sb.auth.signUp({
+      email, password,
+      options: { data: { business_name, trade, whatsapp } }
+    });
     if(error){ mostrarErrorAuth(error.message); document.getElementById("authSubmit").disabled = false; return; }
 
-    // 7 días de prueba gratis desde hoy
-    const vence = new Date();
-    vence.setDate(vence.getDate() + 7);
-    const trial_vence = vence.toISOString().slice(0,10);
-
-    const { error: perfilError } = await sb.from("profiles").insert({
-      id: data.user.id, business_name, trade, whatsapp, trial_vence, suscripcion_activa: true
-    });
-    if(perfilError){ mostrarErrorAuth("Error creando el perfil: " + perfilError.message); document.getElementById("authSubmit").disabled = false; return; }
+    // El perfil lo crea automáticamente un trigger en Supabase apenas se confirma el email.
+    if(!data.session){
+      document.getElementById("authTitle").textContent = "¡Listo! Revisá tu email";
+      alert("Te mandamos un email de confirmación. Abrí ese link y después volvé a iniciar sesión acá.");
+      document.getElementById("authSubmit").disabled = false;
+      return;
+    }
 
     await iniciarApp();
   } else {
