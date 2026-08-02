@@ -876,7 +876,7 @@ document.getElementById("perfilLogoFile").addEventListener("change", async (e)=>
   status.textContent = "Subiendo logo...";
 
   const ext = file.name.split(".").pop();
-  const path = `${profile.id}/logo.${ext}`;
+  const path = `${profile.id}/logo_${Date.now()}.${ext}`;
 
   const { error: uploadError } = await sb.storage.from("logos").upload(path, file, { upsert: true });
   if(uploadError){
@@ -886,7 +886,6 @@ document.getElementById("perfilLogoFile").addEventListener("change", async (e)=>
   }
 
   const { data: urlData } = sb.storage.from("logos").getPublicUrl(path);
-  // Le agregamos un parámetro con la hora para evitar que el navegador muestre una versión vieja en caché
   const logo_url = urlData.publicUrl + "?t=" + Date.now();
 
   const { error: dbError } = await sb.from("profiles").update({ logo_url }).eq("id", profile.id);
