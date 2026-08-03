@@ -527,11 +527,9 @@
         <input type="text" id="perfilDireccion" placeholder="Ej: Barrio Centenario, Junín">
       </div>
       <div class="field">
-        <label for="perfilLogoUrl">Link a tu logo (opcional)</label>
-        <input type="text" id="perfilLogoUrl" placeholder="Link directo a la imagen">
-        <p style="font-size:11.5px; color:var(--ink-soft); margin-top:6px;">
-          Subí tu logo a Google Drive, compartilo, y pegá acá el ID convertido en link directo (o usá <a href="https://imgur.com" target="_blank" style="color:var(--accent-deep);">imgur.com</a>, que da un link directo al subir).
-        </p>
+        <label for="perfilLogoFile">Tu logo (opcional)</label>
+        <input type="file" id="perfilLogoFile" accept="image/png,image/jpeg,image/webp">
+        <p id="perfilLogoStatus" style="font-size:12px; color:var(--ink-soft); margin-top:6px; display:none;"></p>
       </div>
 
       <div id="perfilLogoPreviewWrap" style="display:none; margin-bottom:14px; text-align:center;">
@@ -853,32 +851,64 @@ document.getElementById("btnPerfil").addEventListener("click", ()=>{
   document.getElementById("perfilTrade").value = profile.trade || "";
   document.getElementById("perfilWhatsapp").value = profile.whatsapp || "";
   document.getElementById("perfilDireccion").value = profile.direccion || "";
-  document.getElementById("perfilLogoUrl").value = profile.logo_url || "";
+  document.getElementById("perfilLogoFile").value = "";
   actualizarPreviewLogo();
   document.getElementById("perfilModal").classList.add("open");
 });
 document.getElementById("perfilClose").addEventListener("click", ()=> document.getElementById("perfilModal").classList.remove("open"));
 document.getElementById("perfilModal").addEventListener("click", e=>{ if(e.target.id==="perfilModal") document.getElementById("perfilModal").classList.remove("open"); });
 
-document.getElementById("perfilLogoUrl").addEventListener("input", actualizarPreviewLogo);
 function actualizarPreviewLogo(){
-  const url = document.getElementById("perfilLogoUrl").value.trim();
   const wrap = document.getElementById("perfilLogoPreviewWrap");
   const img = document.getElementById("perfilLogoPreview");
-  if(url){
-    img.src = url;
+  if(profile.logo_url){
+    img.src = profile.logo_url;
     wrap.style.display = "block";
   } else {
     wrap.style.display = "none";
   }
 }
 
+document.getElementById("perfilLogoFile").addEventListener("change", async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+
+  const status = document.getElementById("perfilLogoStatus");
+  status.style.display = "block";
+  status.style.color = "var(--ink-soft)";
+  status.textContent = "Subiendo logo...";
+
+  const ext = file.name.split(".").pop();
+  const path = `${profile.id}/logo.${ext}`;
+
+  const { error: uploadError } = await sb.storage.from("logos").upload(path, file, { upsert: true });
+  if(uploadError){
+    status.style.color = "#B3261E";
+    status.textContent = "No se pudo subir: " + uploadError.message;
+    return;
+  }
+
+  const { data: urlData } = sb.storage.from("logos").getPublicUrl(path);
+  const logo_url = urlData.publicUrl + "?t=" + Date.now();
+
+  const { error: dbError } = await sb.from("profiles").update({ logo_url }).eq("id", profile.id);
+  if(dbError){
+    status.style.color = "#B3261E";
+    status.textContent = "Logo subido, pero no se pudo guardar en tu perfil: " + dbError.message;
+    return;
+  }
+
+  profile.logo_url = logo_url;
+  status.style.color = "var(--ok)";
+  status.textContent = "✅ Logo actualizado.";
+  actualizarPreviewLogo();
+});
+
 document.getElementById("perfilGuardar").addEventListener("click", async ()=>{
   const business_name = document.getElementById("perfilBusinessName").value.trim();
   const trade = document.getElementById("perfilTrade").value.trim();
   const whatsapp = document.getElementById("perfilWhatsapp").value.trim();
   const direccion = document.getElementById("perfilDireccion").value.trim();
-  const logo_url = document.getElementById("perfilLogoUrl").value.trim();
   const errorEl = document.getElementById("perfilError");
 
   if(!business_name || !trade || !whatsapp){
@@ -889,7 +919,7 @@ document.getElementById("perfilGuardar").addEventListener("click", async ()=>{
   errorEl.style.display = "none";
 
   const { error } = await sb.from("profiles").update({
-    business_name, trade, whatsapp, direccion, logo_url
+    business_name, trade, whatsapp, direccion
   }).eq("id", profile.id);
 
   if(error){
@@ -902,7 +932,6 @@ document.getElementById("perfilGuardar").addEventListener("click", async ()=>{
   profile.trade = trade;
   profile.whatsapp = whatsapp;
   profile.direccion = direccion;
-  profile.logo_url = logo_url;
 
   document.getElementById("proNombre").textContent = business_name;
   document.getElementById("subRubro").textContent = trade;
